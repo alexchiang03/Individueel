@@ -1,4 +1,5 @@
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -7,11 +8,30 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import javax.mail.*;
-import javax.mail.internet.*;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
+
+// Subject interface
+interface Subject {
+    void registerObserver(Observer observer);
+
+    void removeObserver(Observer observer);
+
+    void notifyObservers(String message);
+}
+
+// Observer interface
+interface Observer {
+    void update(String message);
+}
 
 public class Main extends Application {
     private TextField recipientsField;
@@ -22,6 +42,7 @@ public class Main extends Application {
     private TextField priceField;
     private File userAttachment;
     private Email emailService;
+    private TextArea logArea;
 
     public static void main(String[] args) {
         launch(args);
@@ -39,7 +60,7 @@ public class Main extends Application {
         grid.setVgap(6);
         grid.setHgap(8);
 
-        //achtergrond kleuren instellen op lichtgrijze tint
+        // Achtergrond kleuren instellen op lichtgrijze tint
         grid.setStyle("-fx-background-color: #F0F0F0; -fx-font-size: 20px; -fx-font-family: Arial;");
 
         // Ontvangers
@@ -100,14 +121,24 @@ public class Main extends Application {
             userAttachment = fileChooser.showOpenDialog(primaryStage);
         });
 
-        //Alle label, knoppen, textvelden etc. krijgen hetzelfe stijl
+        // Logweergave
+        logArea = new TextArea();
+        logArea.setPrefHeight(200);
+        logArea.setPrefWidth(400);
+        GridPane.setConstraints(logArea, 1, 8);
+
+        // Registreer de observer
+        EmailObserver observer = new EmailObserver(logArea);
+        emailService.registerObserver(observer);
+
+        // Alle labels, knoppen, textvelden etc. krijgen hetzelfde stijl
         grid.getChildren().forEach(node -> {
             if (node instanceof Control) {
-                ((Control) node).setStyle("-fx-font-size: 20px; -fx-font-family: Arial;");
+                node.setStyle("-fx-font-size: 20px; -fx-font-family: Arial;");
             }
         });
 
-        grid.getChildren().addAll(recipientsLabel, recipientsField, roomLabel, roomComboBox, dateLabel, dateField, lockerLabel, lockerCodeField, doorLabel, doorCodeField, priceLabel, priceField, chooseFileButton, sendButton);
+        grid.getChildren().addAll(recipientsLabel, recipientsField, roomLabel, roomComboBox, dateLabel, dateField, lockerLabel, lockerCodeField, doorLabel, doorCodeField, priceLabel, priceField, chooseFileButton, sendButton, logArea);
 
         Scene scene = new Scene(grid, 800, 600);
         primaryStage.setScene(scene);
@@ -124,7 +155,7 @@ public class Main extends Application {
             String price = priceField.getText();
             File fixedAttachment = new File("path/to/your/fixed/attachment"); // Voeg hier het pad naar je vaste bestand toe
 
-            //verander hier descriptie voor gebruik
+            // Verander hier descriptie voor gebruik
             MimeMessage message = emailService.draftEmail(recipients, selectedRoom, "Fixed Description", selectedDate, lockerCode, doorCode, price, fixedAttachment, userAttachment);
             emailService.sendEmail(message);
 
@@ -134,80 +165,112 @@ public class Main extends Application {
             System.out.println("Locker Code: " + lockerCode);
             System.out.println("Deur Code: " + doorCode);
             System.out.println("Prijs van de Kamer: " + price);
+
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
+}
 
-    public class Email {
-        private Session newSession;
-        private MimeMessage mimeMessage;
+// Email klasse hier (in een aparte file zou beter zijn)
+class Email implements Subject {
+    private final List<Observer> observers = new ArrayList<>();
+    private Session newSession;
+    private MimeMessage mimeMessage;
 
-        public void sendEmail(MimeMessage mimeMessage) throws MessagingException {
-            String fromUser = "alexchiang1994@gmail.com"; // Vul je e-mail in
-            String fromUserPassword = "cqvk enax tlrh ozcd"; // Vul je app-wachtwoord in
-            String emailHost = "smtp.gmail.com";
-            Transport transport = newSession.getTransport("smtp");
-            transport.connect(emailHost, fromUser, fromUserPassword);
-            transport.sendMessage(mimeMessage, mimeMessage.getAllRecipients());
-            transport.close();
-            System.out.println("Email sent successfully");
+    public void sendEmail(MimeMessage mimeMessage) throws MessagingException {
+        String fromUser = "alexchiang1994@gmail.com"; // Vul je e-mail in
+        String fromUserPassword = "cqvk enax tlrh ozcd"; // Vul je app-wachtwoord in
+        String emailHost = "smtp.gmail.com";
+        Transport transport = newSession.getTransport("smtp");
+        transport.connect(emailHost, fromUser, fromUserPassword);
+        transport.sendMessage(mimeMessage, mimeMessage.getAllRecipients());
+        transport.close();
+        System.out.println("Email sent successfully");
+
+        notifyObservers("Email sent to: " + Arrays.toString(mimeMessage.getAllRecipients()));
+    }
+
+    public MimeMessage draftEmail(String[] recipients, String room, String description, String date, String lockerCode, String doorCode, String price, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
+        String emailSubject = "Booking Confirmation for " + room;
+        String emailBody = "<div style=\"text-align: center;\">"; //centreren van de tekst
+        emailBody += "<h1>Booking Details</h1>"
+                + "<p>Room: " + room + "</p>"
+                + "<p>Description: " + description + "</p>"
+                + "<p>Date: " + date + "</p>"
+                + "<p>Locker Code: " + lockerCode + "</p>"
+                + "<p>Door Code: " + doorCode + "</p>"
+                + "<p>Price: " + price + "</p>";
+
+        mimeMessage = new MimeMessage(newSession);
+
+        for (String emailRecipient : recipients) {
+            mimeMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(emailRecipient));
+        }
+        mimeMessage.setSubject(emailSubject);
+
+        MimeBodyPart bodyPart = new MimeBodyPart();
+        bodyPart.setContent(emailBody, "text/html");
+
+        MimeMultipart multipart = new MimeMultipart();
+        multipart.addBodyPart(bodyPart);
+
+        if (fixedAttachment != null && fixedAttachment.exists()) {
+            MimeBodyPart attachmentBodyPart = new MimeBodyPart();
+            attachmentBodyPart.attachFile(fixedAttachment);
+            multipart.addBodyPart(attachmentBodyPart);
         }
 
-        public MimeMessage draftEmail(String[] recipients, String room, String description, String date, String lockerCode, String doorCode, String price, File fixedAttachment, File userAttachment) throws AddressException, MessagingException, IOException {
-            String emailSubject = "Booking Confirmation for " + room;
-            String emailBody = "<div style=\"text-align: center;\">"; //centreren van de tekst
-                    emailBody +="<h1>Booking Details</h1>"
-                    + "<p>Room: " + room + "</p>"
-                    + "<p>Description: " + description + "</p>"
-                    + "<p>Date: " + date + "</p>"
-                    + "<p>Locker Code: " + lockerCode + "</p>"
-                    + "<p>Door Code: " + doorCode + "</p>"
-                    + "<p>Price: " + price + "</p>";
-
-            mimeMessage = new MimeMessage(newSession);
-
-            for (String emailRecipient : recipients) {
-                mimeMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(emailRecipient));
-            }
-            mimeMessage.setSubject(emailSubject);
-
-            MimeBodyPart bodyPart = new MimeBodyPart();
-            bodyPart.setContent(emailBody, "text/html");
-
-            MimeMultipart multipart = new MimeMultipart();
-            multipart.addBodyPart(bodyPart);
-
-            if (fixedAttachment != null && fixedAttachment.exists()) {
-                MimeBodyPart attachmentBodyPart = new MimeBodyPart();
-                attachmentBodyPart.attachFile(fixedAttachment);
-                multipart.addBodyPart(attachmentBodyPart);
-            }
-
-            if (userAttachment != null && userAttachment.exists()) {
-                MimeBodyPart attachmentBodyPart = new MimeBodyPart();
-                attachmentBodyPart.attachFile(userAttachment);
-                multipart.addBodyPart(attachmentBodyPart);
-            }
-
-            mimeMessage.setContent(multipart);
-            return mimeMessage;
+        if (userAttachment != null && userAttachment.exists()) {
+            MimeBodyPart attachmentBodyPart = new MimeBodyPart();
+            attachmentBodyPart.attachFile(userAttachment);
+            multipart.addBodyPart(attachmentBodyPart);
         }
+        mimeMessage.setContent(multipart);
+        return mimeMessage;
+    }
 
-        public void setupServerProperties() {
-            Properties properties = new Properties();
-            properties.put("mail.smtp.host", "smtp.gmail.com");
-            properties.put("mail.smtp.port", "587");
-            properties.put("mail.smtp.auth", "true");
-            properties.put("mail.smtp.starttls.enable", "true");
+    public void setupServerProperties() {
+        Properties properties = new Properties();
+        properties.put("mail.smtp.host", "smtp.gmail.com");
+        properties.put("mail.smtp.port", "587");
+        properties.put("mail.smtp.auth", "true");
+        properties.put("mail.smtp.starttls.enable", "true");
 
-            newSession = Session.getInstance(properties, new Authenticator() {
-                @Override
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication("alexchiang1994@gmail.com", "cqvk enax tlrh ozcd"); // Vul je gegevens in
-                }
-            });
+        newSession = Session.getInstance(properties, new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication("alexchiang1994@gmail.com", "cqvk enax tlrh ozcd"); // Vul je gegevens in
+            }
+        });
+    }
+
+    // Observer methods
+    public void registerObserver(Observer observer) {
+        observers.add(observer);
+    }
+
+    public void removeObserver(Observer observer) {
+        observers.remove(observer);
+    }
+
+    public void notifyObservers(String message) {
+        for (Observer observer : observers) {
+            observer.update(message);
         }
     }
 }
 
+// EmailObserver class
+class EmailObserver implements Observer {
+    private final TextArea logArea;
+
+    public EmailObserver(TextArea logArea) {
+        this.logArea = logArea;
+    }
+
+    @Override
+    public void update(String message) {
+        Platform.runLater(() -> logArea.appendText(message + "\n"));
+    }
+}
