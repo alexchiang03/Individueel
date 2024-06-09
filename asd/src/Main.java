@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 
+
 public class Main extends Application {
     private TextField recipientsField;
     private ComboBox<String> roomComboBox;
@@ -103,7 +104,7 @@ public class Main extends Application {
         //Alle label, knoppen, textvelden etc. krijgen hetzelfe stijl
         grid.getChildren().forEach(node -> {
             if (node instanceof Control) {
-                ((Control) node).setStyle("-fx-font-size: 20px; -fx-font-family: Arial;");
+                node.setStyle("-fx-font-size: 20px; -fx-font-family: Arial;");
             }
         });
 
@@ -134,6 +135,8 @@ public class Main extends Application {
             System.out.println("Locker Code: " + lockerCode);
             System.out.println("Deur Code: " + doorCode);
             System.out.println("Prijs van de Kamer: " + price);
+
+
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -152,12 +155,16 @@ public class Main extends Application {
             transport.sendMessage(mimeMessage, mimeMessage.getAllRecipients());
             transport.close();
             System.out.println("Email sent successfully");
+
+
         }
 
-        public MimeMessage draftEmail(String[] recipients, String room, String description, String date, String lockerCode, String doorCode, String price, File fixedAttachment, File userAttachment) throws AddressException, MessagingException, IOException {
+        public MimeMessage draftEmail(String[] recipients, String room, String description, String date, String lockerCode, String doorCode, String price, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
             String emailSubject = "Booking Confirmation for " + room;
             String emailBody = "<div style=\"text-align: center;\">"; //centreren van de tekst
-                    emailBody +="<h1>Booking Details</h1>"
+            emailBody += "<h1>Booking Details</h1>"
+
+                    // opmaak van de Mail
                     + "<p>Room: " + room + "</p>"
                     + "<p>Description: " + description + "</p>"
                     + "<p>Date: " + date + "</p>"
@@ -189,7 +196,6 @@ public class Main extends Application {
                 attachmentBodyPart.attachFile(userAttachment);
                 multipart.addBodyPart(attachmentBodyPart);
             }
-
             mimeMessage.setContent(multipart);
             return mimeMessage;
         }
