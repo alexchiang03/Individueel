@@ -22,9 +22,7 @@ import java.util.Properties;
 // Subject interface
 interface Subject {
     void registerObserver(Observer observer);
-
     void removeObserver(Observer observer);
-
     void notifyObservers(String message);
 }
 
@@ -36,12 +34,12 @@ interface Observer {
 public class Main extends Application {
     private TextField recipientsField;
     private ComboBox<String> roomComboBox;
-    private TextField dateField;
+    private DatePicker datePicker;
     private TextField lockerCodeField;
     private TextField doorCodeField;
     private TextField priceField;
     private File userAttachment;
-    private Email emailService;
+    private BookingEmailService bookingEmailService;
     private TextArea logArea;
 
     public static void main(String[] args) {
@@ -50,137 +48,123 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        emailService = new Email();
-        emailService.setupServerProperties();
+        Email emailService = new Email();
+        bookingEmailService = new BookingEmailService(emailService);
 
         primaryStage.setTitle("Email Booking App");
 
-        GridPane grid = new GridPane();
-        grid.setPadding(new Insets(8, 8, 8, 8));
-        grid.setVgap(6);
-        grid.setHgap(8);
+        GridPane grid = createGridPane();
 
-        // Achtergrond kleuren instellen op lichtgrijze tint
-        grid.setStyle("-fx-background-color: #F0F0F0; -fx-font-size: 20px; -fx-font-family: Arial;");
-
-        // Ontvangers
-        Label recipientsLabel = new Label("Email Ontvangers:");
-        GridPane.setConstraints(recipientsLabel, 0, 0);
-        recipientsField = new TextField();
-        recipientsField.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(recipientsField, 1, 0);
-
-        // Kamerkeuze
-        Label roomLabel = new Label("Kies een kamer:");
-        GridPane.setConstraints(roomLabel, 0, 1);
-        roomComboBox = new ComboBox<>();
-        roomComboBox.getItems().addAll("Kamer 1", "Kamer 2", "Kamer 3", "Kamer 4", "Kamer 5", "Kamer 6", "Kamer 7", "Kamer 8", "Kamer 9");
-        roomComboBox.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(roomComboBox, 1, 1);
-
-        // Datum selectie
-        Label dateLabel = new Label("Datum:");
-        GridPane.setConstraints(dateLabel, 0, 2);
-        dateField = new TextField();
-        dateField.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(dateField, 1, 2);
-
-        // Lockercode
-        Label lockerLabel = new Label("Locker Code:");
-        GridPane.setConstraints(lockerLabel, 0, 3);
-        lockerCodeField = new TextField();
-        lockerCodeField.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(lockerCodeField, 1, 3);
-
-        // Deurcode
-        Label doorLabel = new Label("Deur Code:");
-        GridPane.setConstraints(doorLabel, 0, 4);
-        doorCodeField = new TextField();
-        doorCodeField.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(doorCodeField, 1, 4);
-
-        // Prijs
-        Label priceLabel = new Label("Prijs:");
-        GridPane.setConstraints(priceLabel, 0, 5);
-        priceField = new TextField();
-        priceField.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(priceField, 1, 5);
-
-        // Verzendknop
-        Button sendButton = new Button("Verzend E-mail");
-        sendButton.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(sendButton, 1, 7);
-        sendButton.setOnAction(e -> sendEmail());
-
-        // File chooser knop
-        Button chooseFileButton = new Button("Kies bestand voor bijlage");
-        chooseFileButton.setPrefWidth(400); // Set preferred width
-        GridPane.setConstraints(chooseFileButton, 1, 6);
-        chooseFileButton.setOnAction(e -> {
-            FileChooser fileChooser = new FileChooser();
-            userAttachment = fileChooser.showOpenDialog(primaryStage);
-        });
-
-        // Logweergave
-        logArea = new TextArea();
-        logArea.setPrefHeight(200);
-        logArea.setPrefWidth(400);
-        GridPane.setConstraints(logArea, 1, 8);
-
-        // Registreer de observer
-        EmailObserver observer = new EmailObserver(logArea);
-        emailService.registerObserver(observer);
-
-        // Alle labels, knoppen, textvelden etc. krijgen hetzelfde stijl
-        grid.getChildren().forEach(node -> {
-            if (node instanceof Control) {
-                node.setStyle("-fx-font-size: 20px; -fx-font-family: Arial;");
-            }
-        });
-
-        grid.getChildren().addAll(recipientsLabel, recipientsField, roomLabel, roomComboBox, dateLabel, dateField, lockerLabel, lockerCodeField, doorLabel, doorCodeField, priceLabel, priceField, chooseFileButton, sendButton, logArea);
+        configureUIComponents(grid, primaryStage);
 
         Scene scene = new Scene(grid, 800, 600);
         primaryStage.setScene(scene);
         primaryStage.show();
     }
 
+    private GridPane createGridPane() {
+        GridPane grid = new GridPane();
+        grid.setPadding(new Insets(8, 8, 8, 8));
+        grid.setVgap(6);
+        grid.setHgap(8);
+        grid.setStyle("-fx-background-color: #F0F0F0; -fx-font-size: 15px; -fx-font-family: Arial;");
+        return grid;
+    }
+
+    private void configureUIComponents(GridPane grid, Stage primaryStage) {
+        recipientsField = createTextField("Email Ontvangers:", 0, grid);
+        roomComboBox = createComboBox("Kies een kamer:", 1, grid);
+        datePicker = createDatePicker("Datum (maand-dag-jaar):", 2, grid);
+        lockerCodeField = createTextField("Locker Code:", 3, grid);
+        doorCodeField = createTextField("Deur Code:", 4, grid);
+        priceField = createTextField("Prijs (in euro's):", 5, grid);
+
+        Button chooseFileButton = createButton("Kies bestand voor bijlage", 6, grid);
+        chooseFileButton.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            userAttachment = fileChooser.showOpenDialog(primaryStage);
+        });
+
+        Button sendButton = createButton("Verzend E-mail", 7, grid);
+        sendButton.setOnAction(e -> sendEmail());
+
+        logArea = new TextArea();
+        logArea.setPrefHeight(200);
+        logArea.setPrefWidth(600);
+        GridPane.setConstraints(logArea, 1, 8);
+        grid.getChildren().add(logArea);
+
+        EmailObserver observer = new EmailObserver(logArea);
+        bookingEmailService.getEmailService().registerObserver(observer);
+    }
+
+    private TextField createTextField(String labelText, int rowIndex, GridPane grid) {
+        Label label = new Label(labelText);
+        GridPane.setConstraints(label, 0, rowIndex);
+        TextField textField = new TextField();
+        textField.setPrefWidth(400);
+        GridPane.setConstraints(textField, 1, rowIndex);
+        grid.getChildren().addAll(label, textField);
+        return textField;
+    }
+
+    private ComboBox<String> createComboBox(String labelText, int rowIndex, GridPane grid) {
+        Label label = new Label(labelText);
+        GridPane.setConstraints(label, 0, rowIndex);
+        ComboBox<String> comboBox = new ComboBox<>();
+        comboBox.getItems().addAll("Kamer 1", "Kamer 2", "Kamer 3", "Kamer 4", "Kamer 5", "Kamer 6", "Kamer 7", "Kamer 8", "Kamer 9");
+        comboBox.setPrefWidth(400);
+        GridPane.setConstraints(comboBox, 1, rowIndex);
+        grid.getChildren().addAll(label, comboBox);
+        return comboBox;
+    }
+
+    private DatePicker createDatePicker(String labelText, int rowIndex, GridPane grid) {
+        Label label = new Label(labelText);
+        GridPane.setConstraints(label, 0, rowIndex);
+        DatePicker datePicker = new DatePicker();
+        datePicker.setPrefWidth(400);
+        GridPane.setConstraints(datePicker, 1, rowIndex);
+        grid.getChildren().addAll(label, datePicker);
+        return datePicker;
+    }
+
+    private Button createButton(String buttonText, int rowIndex, GridPane grid) {
+        Button button = new Button(buttonText);
+        button.setPrefWidth(400);
+        GridPane.setConstraints(button, 1, rowIndex);
+        grid.getChildren().add(button);
+        return button;
+    }
+
     private void sendEmail() {
         try {
             String[] recipients = recipientsField.getText().split(",");
-            String selectedRoom = roomComboBox.getValue();
-            String selectedDate = dateField.getText();
-            String lockerCode = lockerCodeField.getText();
-            String doorCode = doorCodeField.getText();
-            String price = priceField.getText();
-            File fixedAttachment = new File("path/to/your/fixed/attachment"); // Voeg hier het pad naar je vaste bestand toe
+            String formattedDate = datePicker.getValue().format(java.time.format.DateTimeFormatter.ofPattern("MM-dd-yyyy"));
+            Booking booking = new Booking(
+                    roomComboBox.getValue(), formattedDate,
+                    lockerCodeField.getText(), doorCodeField.getText(), priceField.getText()
+            );
+            File fixedAttachment = new File("path/to/your/fixed/attachment");
 
-            // Verander hier descriptie voor gebruik
-            MimeMessage message = emailService.draftEmail(recipients, selectedRoom, "Fixed Description", selectedDate, lockerCode, doorCode, price, fixedAttachment, userAttachment);
-            emailService.sendEmail(message);
+            bookingEmailService.sendBookingEmail(recipients, booking, fixedAttachment, userAttachment);
 
             System.out.println("Email verzonden naar: " + Arrays.toString(recipients));
-            System.out.println("Geselecteerde Kamer: " + selectedRoom);
-            System.out.println("Geselecteerde Datum: " + selectedDate);
-            System.out.println("Locker Code: " + lockerCode);
-            System.out.println("Deur Code: " + doorCode);
-            System.out.println("Prijs van de Kamer: " + price);
-
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 }
 
-// Email klasse hier (in een aparte file zou beter zijn)
+// Email class
 class Email implements Subject {
-    private final List<Observer> observers = new ArrayList<>();
     private Session newSession;
     private MimeMessage mimeMessage;
+    private final List<Observer> observers = new ArrayList<>();
 
     public void sendEmail(MimeMessage mimeMessage) throws MessagingException {
-        String fromUser = "alexchiang1994@gmail.com"; // Vul je e-mail in
-        String fromUserPassword = "cqvk enax tlrh ozcd"; // Vul je app-wachtwoord in
+        String fromUser = "alexchiang1994@gmail.com"; // Your email
+        String fromUserPassword = "cqvk enax tlrh ozcd"; // Your app password
         String emailHost = "smtp.gmail.com";
         Transport transport = newSession.getTransport("smtp");
         transport.connect(emailHost, fromUser, fromUserPassword);
@@ -191,19 +175,17 @@ class Email implements Subject {
         notifyObservers("Email sent to: " + Arrays.toString(mimeMessage.getAllRecipients()));
     }
 
-    public MimeMessage draftEmail(String[] recipients, String room, String description, String date, String lockerCode, String doorCode, String price, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
-        String emailSubject = "Booking Confirmation for " + room;
-        String emailBody = "<div style=\"text-align: center;\">"; //centreren van de tekst
-        emailBody += "<h1>Booking Details</h1>"
-                + "<p>Room: " + room + "</p>"
-                + "<p>Description: " + description + "</p>"
-                + "<p>Date: " + date + "</p>"
-                + "<p>Locker Code: " + lockerCode + "</p>"
-                + "<p>Door Code: " + doorCode + "</p>"
-                + "<p>Price: " + price + "</p>";
+    public MimeMessage draftEmail(String[] recipients, Booking booking, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
+        String emailSubject = "Booking Confirmation for " + booking.getRoom();
+        String emailBody = "<div style=\"text-align: center;\">"
+                + "<h1>Booking Details</h1>"
+                + "<p>Room: " + booking.getRoom() + "</p>"
+                + "<p>Date: " + booking.getDate() + "</p>"
+                + "<p>Locker Code: " + booking.getLockerCode() + "</p>"
+                + "<p>Door Code: " + booking.getDoorCode() + "</p>"
+                + "<p>Price: &euro;" + booking.getPrice() + "</p></div>";
 
         mimeMessage = new MimeMessage(newSession);
-
         for (String emailRecipient : recipients) {
             mimeMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(emailRecipient));
         }
@@ -240,24 +222,67 @@ class Email implements Subject {
         newSession = Session.getInstance(properties, new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication("alexchiang1994@gmail.com", "cqvk enax tlrh ozcd"); // Vul je gegevens in
+                return new PasswordAuthentication("alexchiang1994@gmail.com", "cqvk enax tlrh ozcd"); // Your credentials
             }
         });
     }
 
-    // Observer methods
+    @Override
     public void registerObserver(Observer observer) {
         observers.add(observer);
     }
 
+    @Override
     public void removeObserver(Observer observer) {
         observers.remove(observer);
     }
 
+    @Override
     public void notifyObservers(String message) {
         for (Observer observer : observers) {
             observer.update(message);
         }
+    }
+}
+
+class Booking {
+    private String room;
+    private String date;
+    private String lockerCode;
+    private String doorCode;
+    private String price;
+
+    public Booking(String room, String date, String lockerCode, String doorCode, String price) {
+        this.room = room;
+        this.date = date;
+        this.lockerCode = lockerCode;
+        this.doorCode = doorCode;
+        this.price = price;
+    }
+
+    // Getters
+    public String getRoom() { return room; }
+    public String getDate() { return date; }
+    public String getLockerCode() { return lockerCode; }
+    public String getDoorCode() { return doorCode; }
+    public String getPrice() { return price; }
+}
+
+class BookingEmailService {
+    private final Email emailService;
+
+    public BookingEmailService(Email emailService) {
+        this.emailService = emailService;
+        this.emailService.setupServerProperties();
+    }
+
+    public void sendBookingEmail(String[] recipients, Booking booking, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
+        MimeMessage message = emailService.draftEmail(recipients, booking, fixedAttachment, userAttachment);
+        emailService.sendEmail(message);
+    }
+
+    public Email getEmailService() {
+        return emailService;
     }
 }
 
