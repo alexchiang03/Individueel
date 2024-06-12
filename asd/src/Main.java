@@ -6,7 +6,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
@@ -14,10 +13,12 @@ import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import javafx.scene.control.TextArea;
 
 // Subject interface
 interface Subject {
@@ -54,7 +55,6 @@ public class Main extends Application {
         primaryStage.setTitle("Email Booking App");
 
         GridPane grid = createGridPane();
-
         configureUIComponents(grid, primaryStage);
 
         Scene scene = new Scene(grid, 800, 600);
@@ -67,17 +67,17 @@ public class Main extends Application {
         grid.setPadding(new Insets(8, 8, 8, 8));
         grid.setVgap(6);
         grid.setHgap(8);
-        grid.setStyle("-fx-background-color: #F0F0F0; -fx-font-size: 15px; -fx-font-family: Arial;");
+        grid.setStyle("-fx-background-color: #F0F0F0; -fx-font-size: 20px; -fx-font-family: Arial;");
         return grid;
     }
 
     private void configureUIComponents(GridPane grid, Stage primaryStage) {
         recipientsField = createTextField("Email Ontvangers:", 0, grid);
         roomComboBox = createComboBox("Kies een kamer:", 1, grid);
-        datePicker = createDatePicker("Datum (maand-dag-jaar):", 2, grid);
+        datePicker = createDatePicker("Datum:", 2, grid);
         lockerCodeField = createTextField("Locker Code:", 3, grid);
         doorCodeField = createTextField("Deur Code:", 4, grid);
-        priceField = createTextField("Prijs (in euro's):", 5, grid);
+        priceField = createTextField("Prijs:", 5, grid);
 
         Button chooseFileButton = createButton("Kies bestand voor bijlage", 6, grid);
         chooseFileButton.setOnAction(e -> {
@@ -108,6 +108,16 @@ public class Main extends Application {
         return textField;
     }
 
+    private DatePicker createDatePicker(String labelText, int rowIndex, GridPane grid) {
+        Label label = new Label(labelText);
+        GridPane.setConstraints(label, 0, rowIndex);
+        DatePicker datePicker = new DatePicker();
+        datePicker.setPrefWidth(400);
+        GridPane.setConstraints(datePicker, 1, rowIndex);
+        grid.getChildren().addAll(label, datePicker);
+        return datePicker;
+    }
+
     private ComboBox<String> createComboBox(String labelText, int rowIndex, GridPane grid) {
         Label label = new Label(labelText);
         GridPane.setConstraints(label, 0, rowIndex);
@@ -117,16 +127,6 @@ public class Main extends Application {
         GridPane.setConstraints(comboBox, 1, rowIndex);
         grid.getChildren().addAll(label, comboBox);
         return comboBox;
-    }
-
-    private DatePicker createDatePicker(String labelText, int rowIndex, GridPane grid) {
-        Label label = new Label(labelText);
-        GridPane.setConstraints(label, 0, rowIndex);
-        DatePicker datePicker = new DatePicker();
-        datePicker.setPrefWidth(400);
-        GridPane.setConstraints(datePicker, 1, rowIndex);
-        grid.getChildren().addAll(label, datePicker);
-        return datePicker;
     }
 
     private Button createButton(String buttonText, int rowIndex, GridPane grid) {
@@ -140,10 +140,10 @@ public class Main extends Application {
     private void sendEmail() {
         try {
             String[] recipients = recipientsField.getText().split(",");
-            String formattedDate = datePicker.getValue().format(java.time.format.DateTimeFormatter.ofPattern("MM-dd-yyyy"));
+            LocalDate date = datePicker.getValue();
             Booking booking = new Booking(
-                    roomComboBox.getValue(), formattedDate,
-                    lockerCodeField.getText(), doorCodeField.getText(), priceField.getText()
+                    roomComboBox.getValue(), date,
+                    lockerCodeField.getText(), doorCodeField.getText(), new Price(new BigDecimal(priceField.getText()))
             );
             File fixedAttachment = new File("path/to/your/fixed/attachment");
 
@@ -156,7 +156,7 @@ public class Main extends Application {
     }
 }
 
-// Email class
+// Email klasse hier (in een aparte file zou beter zijn)
 class Email implements Subject {
     private Session newSession;
     private MimeMessage mimeMessage;
@@ -176,40 +176,46 @@ class Email implements Subject {
     }
 
     public MimeMessage draftEmail(String[] recipients, Booking booking, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
-        String emailSubject = "Booking Confirmation for " + booking.getRoom();
-        String emailBody = "<div style=\"text-align: center;\">"
-                + "<h1>Booking Details</h1>"
-                + "<p>Room: " + booking.getRoom() + "</p>"
-                + "<p>Date: " + booking.getDate() + "</p>"
-                + "<p>Locker Code: " + booking.getLockerCode() + "</p>"
-                + "<p>Door Code: " + booking.getDoorCode() + "</p>"
-                + "<p>Price: &euro;" + booking.getPrice() + "</p></div>";
-
         mimeMessage = new MimeMessage(newSession);
+        addRecipients(recipients);
+        mimeMessage.setSubject("Booking Confirmation for " + booking.getRoom());
+
+        MimeMultipart multipart = new MimeMultipart();
+        multipart.addBodyPart(createBodyPart(booking));
+
+        addAttachment(multipart, fixedAttachment);
+        addAttachment(multipart, userAttachment);
+
+        mimeMessage.setContent(multipart);
+        return mimeMessage;
+    }
+
+    private void addRecipients(String[] recipients) throws MessagingException {
         for (String emailRecipient : recipients) {
             mimeMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(emailRecipient));
         }
-        mimeMessage.setSubject(emailSubject);
+    }
+
+    private MimeBodyPart createBodyPart(Booking booking) throws MessagingException {
+        String emailBody = "<div style=\"text-align: center;\">"
+                + "<h1>Booking Details</h1>"
+                + "<p>Room: " + booking.getRoom() + "</p>"
+                + "<p>Date: " + DateUtil.formatDate(booking.getDate()) + "</p>"
+                + "<p>Locker Code: " + booking.getLockerCode() + "</p>"
+                + "<p>Door Code: " + booking.getDoorCode() + "</p>"
+                + "<p>Price: " + booking.getPrice() + "</p></div>";
 
         MimeBodyPart bodyPart = new MimeBodyPart();
         bodyPart.setContent(emailBody, "text/html");
+        return bodyPart;
+    }
 
-        MimeMultipart multipart = new MimeMultipart();
-        multipart.addBodyPart(bodyPart);
-
-        if (fixedAttachment != null && fixedAttachment.exists()) {
+    private void addAttachment(MimeMultipart multipart, File attachment) throws MessagingException, IOException {
+        if (attachment != null && attachment.exists()) {
             MimeBodyPart attachmentBodyPart = new MimeBodyPart();
-            attachmentBodyPart.attachFile(fixedAttachment);
+            attachmentBodyPart.attachFile(attachment);
             multipart.addBodyPart(attachmentBodyPart);
         }
-
-        if (userAttachment != null && userAttachment.exists()) {
-            MimeBodyPart attachmentBodyPart = new MimeBodyPart();
-            attachmentBodyPart.attachFile(userAttachment);
-            multipart.addBodyPart(attachmentBodyPart);
-        }
-        mimeMessage.setContent(multipart);
-        return mimeMessage;
     }
 
     public void setupServerProperties() {
@@ -245,14 +251,15 @@ class Email implements Subject {
     }
 }
 
+// Booking klasse hier (in een aparte file zou beter zijn)
 class Booking {
     private String room;
-    private String date;
+    private LocalDate date;
     private String lockerCode;
     private String doorCode;
-    private String price;
+    private Price price;
 
-    public Booking(String room, String date, String lockerCode, String doorCode, String price) {
+    public Booking(String room, LocalDate date, String lockerCode, String doorCode, Price price) {
         this.room = room;
         this.date = date;
         this.lockerCode = lockerCode;
@@ -262,23 +269,24 @@ class Booking {
 
     // Getters
     public String getRoom() { return room; }
-    public String getDate() { return date; }
+    public LocalDate getDate() { return date; }
     public String getLockerCode() { return lockerCode; }
     public String getDoorCode() { return doorCode; }
-    public String getPrice() { return price; }
+    public Price getPrice() { return price; }
 }
 
+// BookingEmailService klasse hier (in een aparte file zou beter zijn)
 class BookingEmailService {
     private final Email emailService;
 
     public BookingEmailService(Email emailService) {
         this.emailService = emailService;
-        this.emailService.setupServerProperties();
     }
 
     public void sendBookingEmail(String[] recipients, Booking booking, File fixedAttachment, File userAttachment) throws MessagingException, IOException {
-        MimeMessage message = emailService.draftEmail(recipients, booking, fixedAttachment, userAttachment);
-        emailService.sendEmail(message);
+        emailService.setupServerProperties();
+        MimeMessage emailMessage = emailService.draftEmail(recipients, booking, fixedAttachment, userAttachment);
+        emailService.sendEmail(emailMessage);
     }
 
     public Email getEmailService() {
@@ -286,7 +294,7 @@ class BookingEmailService {
     }
 }
 
-// EmailObserver class
+// EmailObserver klasse hier (in een aparte file zou beter zijn)
 class EmailObserver implements Observer {
     private final TextArea logArea;
 
@@ -297,5 +305,26 @@ class EmailObserver implements Observer {
     @Override
     public void update(String message) {
         Platform.runLater(() -> logArea.appendText(message + "\n"));
+    }
+}
+
+// DateUtil klasse hier (in een aparte file zou beter zijn)
+class DateUtil {
+    public static String formatDate(LocalDate date) {
+        return date.format(DateTimeFormatter.ofPattern("MM-dd-yyyy"));
+    }
+}
+
+// Price klasse hier (in een aparte file zou beter zijn)
+class Price {
+    private final BigDecimal amount;
+
+    public Price(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    @Override
+    public String toString() {
+        return "&euro;" + amount.setScale(2, RoundingMode.HALF_UP).toString();
     }
 }
