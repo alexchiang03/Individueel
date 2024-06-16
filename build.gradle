@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+}
+
+group 'com.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+test {
+    useJUnitPlatform()
+}
+subprojects {
+    apply plugin: 'java'
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testImplementation 'junit:junit:4.13.2'
+    }
+
+    tasks.withType(JavaCompile) {
+        options.encoding = 'UTF-8'
+    }
+
+    tasks.withType(Test) {
+        useJUnitPlatform()
+    }
+}
+dependencies {
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+}
+
+task hello {
+    doLast {
+        println 'Hello from subproject1'
+    }
+}
+
